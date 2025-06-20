@@ -1,2 +1,6 @@
 gradio
 requests
+llama-index
+llama-index-llms-huggingface-api
+llama-index-tools-tavily-research 
+tavily-python

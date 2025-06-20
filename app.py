@@ -1,28 +1,35 @@
+import logging
+import sys
+# logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+# logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+
 import os
 import gradio as gr
 import requests
 import inspect
 import pandas as pd
+from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
+from llama_index.core.agent import ReActAgent
+from agent_tools.WebSearchTool import web_search_tools
+from agent_prompts.SystemPrompt import gaia_system_prompt
 
-# (Keep Constants as is)
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
 # --- Basic Agent Definition ---
-# ----- THIS IS WERE YOU CAN BUILD WHAT YOU WANT ------
 class BasicAgent:
     def __init__(self):
-        print("BasicAgent initialized.")
-    def __call__(self, question: str) -> str:
-        print(f"Agent received question (first 50 chars): {question[:50]}...")
-        fixed_answer = "This is a default answer."
-        print(f"Agent returning fixed answer: {fixed_answer}")
-        return fixed_answer
+        self.llm = HuggingFaceInferenceAPI(model_name = "Qwen/Qwen2.5-72B-Instruct")
+        # print(f"ReAct Agent signature--------------------------------------- \n {inspect.signature(ReActAgent.from_tools)} \n ReAct Agent signature--------------------------------------- \n" ) 
+        self.agent = ReActAgent.from_tools(tools=web_search_tools(), llm=self.llm, context=gaia_system_prompt, verbose=True)
 
-def run_and_submit_all( profile: gr.OAuthProfile | None):
+    async def __call__(self, question: str) -> str:
+        response = self.agent.chat(question)
+        return str(response)
+
+async def run_and_submit_all( profile: gr.OAuthProfile | None):
     """
-    Fetches all questions, runs the BasicAgent on them, submits all answers,
-    and displays the results.
+    Fetches all questions, runs the BasicAgent on them, submits all answers, and displays the results.
     """
     # --- Determine HF Space Runtime URL and Repo URL ---
     space_id = os.getenv("SPACE_ID") # Get the SPACE_ID for sending link to the code
@@ -48,6 +55,36 @@ def run_and_submit_all( profile: gr.OAuthProfile | None):
     agent_code = f"https://huggingface.co/spaces/{space_id}/tree/main"
     print(agent_code)
 
+    # 2. Test Case
+    test_question = "How many studio albums were published by Mercedes Sosa between 2000 and 2009 (included)?"
+    print(f"--- RUNNING SINGLE TEST ---")
+    print(f"Question: {test_question}")
+
+    # 3. Run the agent and display the result
+    try:
+        # This calls your agent's __call__ method
+        submitted_answer = await agent(test_question)
+        
+        # Print the final answer clearly in the terminal
+        print("-" * 50)
+        print(f">>> AGENT'S FINAL ANSWER: {submitted_answer}")
+        print("-" * 50)
+
+        # Prepare a simple status message and table for the Gradio UI
+        status_message = "Test Finished Successfully."
+        results_df = pd.DataFrame([
+            {"Question": test_question, "Submitted Answer": submitted_answer}
+        ])
+
+    except Exception as e:
+        print(f"Error during single test run: {e}")
+        status_message = f"Agent returned an error: {e}"
+        results_df = pd.DataFrame()
+
+    # 4. Return early to prevent fetching all questions or submitting
+    return status_message, results_df
+
+    '''
     # 2. Fetch Questions
     print(f"Fetching questions from: {questions_url}")
     try:
@@ -138,7 +175,7 @@ def run_and_submit_all( profile: gr.OAuthProfile | None):
         print(status_message)
         results_df = pd.DataFrame(results_log)
         return status_message, results_df
-
+    '''
 
 # --- Build Gradio Interface using Blocks ---
 with gr.Blocks() as demo:
