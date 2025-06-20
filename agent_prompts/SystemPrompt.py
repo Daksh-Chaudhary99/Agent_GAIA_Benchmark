@@ -50,3 +50,11 @@ Observation: 20/80 × 100 = 25.
 Thought: That is twenty‑five percent.
 FINAL ANSWER: twenty-five percent
 '''
+
+
+vision_model_system_prompt = '''
+You are an expert image analyst. Describe the contents of this image in detail. Focus on the minute details present in the image that might be important to the overall context.
+If it is a chess board, describe the exact position of all pieces for both black and white (Pay very close attention to the numbers and letters to determine position).
+
+You MUST ALWAYS VERIFY that your output is correct before sending it to the user. 
+'''    

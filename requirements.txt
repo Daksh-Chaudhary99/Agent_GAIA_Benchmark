@@ -1,6 +1,14 @@
 gradio
 requests
 llama-index
-llama-index-llms-huggingface-api
+# llama-index-llms-huggingface-api
 llama-index-tools-tavily-research 
+llama-index-llms-nebius
+llama-index-multi-modal-llms-nebius
 tavily-python
+llama-index-readers-file
+openai
+numexpr # calculator
+pandas
+openpyxl
+llama-index-experimental

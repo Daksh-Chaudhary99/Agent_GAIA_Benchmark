@@ -6,6 +6,6 @@ from llama_index.tools.tavily_research import TavilyToolSpec
 def web_search_tools()->List[FunctionTool]:
     "Tool to search the web with Tavily (search + scraping)"
 
-    os.environ["TAVILY_API_KEY"] = "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"
+    os.environ["TAVILY_API_KEY"] = ""
     tavily_spec = TavilyToolSpec(api_key=os.getenv("TAVILY_API_KEY"))
     return tavily_spec.to_tool_list()

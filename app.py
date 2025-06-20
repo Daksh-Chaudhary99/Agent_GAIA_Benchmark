@@ -1,35 +1,23 @@
-import logging
-import sys
-# logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-# logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
-
 import os
-import gradio as gr
-import requests
+import sys
 import inspect
+import requests
+import logging
+import gradio as gr
 import pandas as pd
-from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
-from llama_index.core.agent import ReActAgent
-from agent_tools.WebSearchTool import web_search_tools
-from agent_prompts.SystemPrompt import gaia_system_prompt
+from agent import GaiaAgent
 
-# --- Constants ---
-DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
+# Logging 
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
 
-# --- Basic Agent Definition ---
-class BasicAgent:
-    def __init__(self):
-        self.llm = HuggingFaceInferenceAPI(model_name = "Qwen/Qwen2.5-72B-Instruct")
-        # print(f"ReAct Agent signature--------------------------------------- \n {inspect.signature(ReActAgent.from_tools)} \n ReAct Agent signature--------------------------------------- \n" ) 
-        self.agent = ReActAgent.from_tools(tools=web_search_tools(), llm=self.llm, context=gaia_system_prompt, verbose=True)
+# Constants
+BASE_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
-    async def __call__(self, question: str) -> str:
-        response = self.agent.chat(question)
-        return str(response)
-
+# Function to run GAIA dataset questions
 async def run_and_submit_all( profile: gr.OAuthProfile | None):
     """
-    Fetches all questions, runs the BasicAgent on them, submits all answers, and displays the results.
+    Fetches all questions, runs the GaiaAgent on them, submits all answers, and displays the results.
     """
     # --- Determine HF Space Runtime URL and Repo URL ---
     space_id = os.getenv("SPACE_ID") # Get the SPACE_ID for sending link to the code
@@ -41,13 +29,13 @@ async def run_and_submit_all( profile: gr.OAuthProfile | None):
         print("User not logged in.")
         return "Please Login to Hugging Face with the button.", None
 
-    api_url = DEFAULT_API_URL
+    api_url = BASE_API_URL
     questions_url = f"{api_url}/questions"
     submit_url = f"{api_url}/submit"
 
-    # 1. Instantiate Agent ( modify this part to create your agent)
+    # 1. Instantiate Agent
     try:
-        agent = BasicAgent()
+        agent = GaiaAgent()
     except Exception as e:
         print(f"Error instantiating agent: {e}")
         return f"Error initializing agent: {e}", None
@@ -55,36 +43,6 @@ async def run_and_submit_all( profile: gr.OAuthProfile | None):
     agent_code = f"https://huggingface.co/spaces/{space_id}/tree/main"
     print(agent_code)
 
-    # 2. Test Case
-    test_question = "How many studio albums were published by Mercedes Sosa between 2000 and 2009 (included)?"
-    print(f"--- RUNNING SINGLE TEST ---")
-    print(f"Question: {test_question}")
-
-    # 3. Run the agent and display the result
-    try:
-        # This calls your agent's __call__ method
-        submitted_answer = await agent(test_question)
-        
-        # Print the final answer clearly in the terminal
-        print("-" * 50)
-        print(f">>> AGENT'S FINAL ANSWER: {submitted_answer}")
-        print("-" * 50)
-
-        # Prepare a simple status message and table for the Gradio UI
-        status_message = "Test Finished Successfully."
-        results_df = pd.DataFrame([
-            {"Question": test_question, "Submitted Answer": submitted_answer}
-        ])
-
-    except Exception as e:
-        print(f"Error during single test run: {e}")
-        status_message = f"Agent returned an error: {e}"
-        results_df = pd.DataFrame()
-
-    # 4. Return early to prevent fetching all questions or submitting
-    return status_message, results_df
-
-    '''
     # 2. Fetch Questions
     print(f"Fetching questions from: {questions_url}")
     try:
@@ -113,11 +71,18 @@ async def run_and_submit_all( profile: gr.OAuthProfile | None):
     for item in questions_data:
         task_id = item.get("task_id")
         question_text = item.get("question")
+        file_name = item.get("file_name")
+
+        full_input=f"""
+        Task ID: {task_id}
+        File Name: {file_name}
+        Question: {question_text}
+        """
         if not task_id or question_text is None:
             print(f"Skipping item with missing task_id or question: {item}")
             continue
         try:
-            submitted_answer = agent(question_text)
+            submitted_answer = await agent(full_input)
             answers_payload.append({"task_id": task_id, "submitted_answer": submitted_answer})
             results_log.append({"Task ID": task_id, "Question": question_text, "Submitted Answer": submitted_answer})
         except Exception as e:
@@ -174,24 +139,15 @@ async def run_and_submit_all( profile: gr.OAuthProfile | None):
         status_message = f"An unexpected error occurred during submission: {e}"
         print(status_message)
         results_df = pd.DataFrame(results_log)
-        return status_message, results_df
-    '''
+        return status_message, results_df  
 
 # --- Build Gradio Interface using Blocks ---
 with gr.Blocks() as demo:
-    gr.Markdown("# Basic Agent Evaluation Runner")
+    gr.Markdown("# GAIA Agent Evaluation Runner")
     gr.Markdown(
         """
-        **Instructions:**
-
-        1.  Please clone this space, then modify the code to define your agent's logic, the tools, the necessary packages, etc ...
-        2.  Log in to your Hugging Face account using the button below. This uses your HF username for submission.
-        3.  Click 'Run Evaluation & Submit All Answers' to fetch questions, run your agent, submit answers, and see the score.
-
-        ---
         **Disclaimers:**
         Once clicking on the "submit button, it can take quite some time ( this is the time for the agent to go through all the questions).
-        This space provides a basic setup and is intentionally sub-optimal to encourage you to develop your own, more robust solution. For instance for the delay process of the submit button, a solution could be to cache the answers and submit in a seperate action or even to answer the questions in async.
         """
     )
 
